@@ -24,9 +24,7 @@
 .segment	"RODATA"
 
 _text:
-	.byte	$54,$68,$69,$73,$20,$73,$70,$61,$63,$65,$20,$6C,$65,$66,$74,$20
-	.byte	$69,$6E,$74,$65,$6E,$74,$69,$6F,$6E,$61,$6C,$6C,$79,$20,$20,$20
-	.byte	$62,$6C,$61,$6E,$6B,$2E,$2E,$2E,$00
+	.byte	$48,$65,$6C,$6C,$6F,$20,$57,$6F,$72,$6C,$64,$21,$00
 _palette:
 	.byte	$0f
 	.byte	$00
@@ -72,10 +70,10 @@ _i:
 	ldx     #>(_palette)
 	jsr     _pal_bg
 ;
-; vram_adr(NTADR_A(2,14)); // screen is 32 x 30 tiles
+; vram_adr(NTADR_A(10,14)); // screen is 32 x 30 tiles
 ;
 	ldx     #$21
-	lda     #$C2
+	lda     #$CA
 	jsr     _vram_adr
 ;
 ; i = 0;

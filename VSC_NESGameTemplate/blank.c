@@ -29,7 +29,7 @@ unsigned char i;
 
 
 
-const unsigned char text[]="This space left intentionally   blank..."; // zero terminated c string
+const unsigned char text[]="Hello World!"; // zero terminated c string
 
 const unsigned char palette[]={
 BLACK, DK_GY, LT_GY, WHITE,
@@ -50,7 +50,7 @@ void main (void) {
 		
 	// set a starting point on the screen
 	// vram_adr(NTADR_A(x,y));
-	vram_adr(NTADR_A(2,14)); // screen is 32 x 30 tiles
+	vram_adr(NTADR_A(10,14)); // screen is 32 x 30 tiles
 
 	i = 0;
 	while(text[i]){
