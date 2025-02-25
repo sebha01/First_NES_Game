@@ -12,19 +12,17 @@
 	.macpack	longbranch
 	.forceimport	__STARTUP__
 	.import		_pal_bg
+	.import		_ppu_wait_nmi
 	.import		_ppu_off
 	.import		_ppu_on_all
-	.import		_vram_adr
-	.import		_vram_put
-	.export		_i
-	.export		_text
+	.import		_set_vram_update
 	.export		_palette
+	.export		_text
+	.export		_two_letters
 	.export		_main
 
 .segment	"RODATA"
 
-_text:
-	.byte	$48,$65,$6C,$6C,$6F,$20,$57,$6F,$72,$6C,$64,$21,$00
 _palette:
 	.byte	$0f
 	.byte	$00
@@ -42,12 +40,31 @@ _palette:
 	.byte	$00
 	.byte	$00
 	.byte	$00
-
-.segment	"BSS"
-
-.segment	"ZEROPAGE"
-_i:
-	.res	1,$00
+_text:
+	.byte	$61
+	.byte	$ca
+	.byte	$0c
+	.byte	$48
+	.byte	$45
+	.byte	$4c
+	.byte	$4c
+	.byte	$4f
+	.byte	$20
+	.byte	$57
+	.byte	$4f
+	.byte	$52
+	.byte	$4c
+	.byte	$44
+	.byte	$21
+	.byte	$ff
+_two_letters:
+	.byte	$22
+	.byte	$28
+	.byte	$41
+	.byte	$20
+	.byte	$b2
+	.byte	$42
+	.byte	$ff
 
 ; ---------------------------------------------------------------
 ; void __near__ main (void)
@@ -64,50 +81,45 @@ _i:
 ;
 	jsr     _ppu_off
 ;
-; pal_bg(palette); // load the BG palette
+; pal_bg(palette); // load the palette
 ;
 	lda     #<(_palette)
 	ldx     #>(_palette)
 	jsr     _pal_bg
 ;
-; vram_adr(NTADR_A(10,14)); // screen is 32 x 30 tiles
-;
-	ldx     #$21
-	lda     #$CA
-	jsr     _vram_adr
-;
-; i = 0;
-;
-	lda     #$00
-	sta     _i
-;
-; while(text[i]){
-;
-	jmp     L0004
-;
-; vram_put(text[i]); // this pushes 1 char to the screen
-;
-L0002:	ldy     _i
-	lda     _text,y
-	jsr     _vram_put
-;
-; ++i;
-;
-	inc     _i
-;
-; while(text[i]){
-;
-L0004:	ldy     _i
-	lda     _text,y
-	bne     L0002
-;
 ; ppu_on_all(); // turn on screen
 ;
 	jsr     _ppu_on_all
 ;
+; set_vram_update(text); // set a pointer to the data to transfer during nmi
+;
+	lda     #<(_text)
+	ldx     #>(_text)
+	jsr     _set_vram_update
+;
+; ppu_wait_nmi(); // waits until the next nmi is completed, also sets a VRAM update flag
+;
+	jsr     _ppu_wait_nmi
+;
+; set_vram_update(two_letters); // set a pointer to the data
+;
+	lda     #<(_two_letters)
+	ldx     #>(_two_letters)
+	jsr     _set_vram_update
+;
+; ppu_wait_nmi(); // the two_letters will be auto pushed to the PPU in the next nmi
+;
+	jsr     _ppu_wait_nmi
+;
+; set_vram_update(NULL); // just turns off the VRAM update system so that it
+;
+	ldx     #$00
+	txa
+	jsr     _set_vram_update
+;
 ; while (1){
 ;
-L000A:	jmp     L000A
+L0005:	jmp     L0005
 
 .endproc
 
