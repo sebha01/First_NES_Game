@@ -1,14 +1,17 @@
 /*	simple Hello World, for cc65, for NES
- *  writing to the screen with rendering ON
+ *  writing to the screen with rendering ON, via a vram buffer
  *	using neslib
  *	Doug Fraker 2018
  */	
-
-
  
+
+// using a buffer, we have more flexibility, since we can adjust the 
+// screen position of a PPU write, and can piggy back multiple data 
+// sets into 1 push, doing more than 1 update per frame, and 
+// the data sets can have zeroes, since they are not zero terminated
+
 #include "LIB/neslib.h"
 #include "LIB/nesdoug.h"
-
 
 #define BLACK 0x0f
 #define DK_GY 0x00
@@ -26,11 +29,8 @@ BLACK, DK_GY, LT_GY, WHITE,
 
 
 // example of sequential vram data
-const unsigned char text[]={
-MSB(NTADR_A(10,14))|NT_UPD_HORZ, // where to write, repeat horizontally
-LSB(NTADR_A(10,14)),
-12, // length of write
-'H', // the data to be written, 12 chars
+const char text[]={
+'H',
 'E',
 'L',
 'L',
@@ -42,45 +42,52 @@ LSB(NTADR_A(10,14)),
 'L',
 'D',
 '!',
-NT_UPD_EOF}; // data must end in EOF
+}; // not a c string, so no zero terminating
 
 
-// example of non-sequential vram data
-const unsigned char two_letters[]={
-MSB(NTADR_A(8,17)),
-LSB(NTADR_A(8,17)),	
-'A',
-MSB(NTADR_A(18,5)),
-LSB(NTADR_A(18,5)),	
-'B',
-NT_UPD_EOF}; // data must end in EOF
+// example of single byte write
+const unsigned char LETTERA='A';
+
+//global variable
+int address;
 
 
 
 
 
-
-	
 
 void main (void) {
-	
-	ppu_off(); // screen off
 
-	pal_bg(palette); //	load the palette
-	
 	ppu_on_all(); // turn on screen
-
-	set_vram_update(text); // set a pointer to the data to transfer during nmi
 	
-	ppu_wait_nmi(); // waits until the next nmi is completed, also sets a VRAM update flag
-					// the text will be auto pushed to the PPU during nmi
-					
-	set_vram_update(two_letters); // set a pointer to the data
+	pal_bg(palette); //	load the palette, this can be done any time, even with rendering on
+					 // but, it's competing with the vram_buffer for v-blank time
+					 // so, let's wait a v-blank first, so all the palette changes are done
+					 
+	ppu_wait_nmi(); // wait
 	
-	ppu_wait_nmi(); // the two_letters will be auto pushed to the PPU in the next nmi
+	// now fill the vram_buffer
 	
-	set_vram_update(NULL);	// just turns off the VRAM update system so that it
-							// isn't wasting time writing the same data to the PPU every frame
+	set_vram_buffer(); // points ppu update to vram_buffer, do this at least once
+						 
+	one_vram_buffer(LETTERA, NTADR_A(2,3)); // pushes 1 byte worth of data to the vram_buffer
+	one_vram_buffer(0x42, NTADR_A(5,6)); // another 1 byte write, letter B
+	
+	// optionally, you could use this function to get the ppu address at run time
+	address = get_ppu_addr(0,0x38,0xc0); // (char nt, char x, char y);
+	one_vram_buffer('C', address);	// another 1 byte write
+	
+	multi_vram_buffer_horz(text, sizeof(text), NTADR_A(10,7)); // pushes 12 bytes, horz
+	multi_vram_buffer_horz(text, sizeof(text), NTADR_A(12,12)); // lower
+	multi_vram_buffer_horz(text, sizeof(text), NTADR_A(14,17)); // lower still
+	
+	multi_vram_buffer_vert(text, sizeof(text), NTADR_A(10,7)); // vertical
+	
+	// we've done 51 bytes of transfer to the ppu in 1 v-blank
+	
+	// do not try to push much more than 30 non-sequential or 70 sequential bytes at once
+	
+	ppu_wait_nmi(); // waits till nmi, and push new updates to the ppu
 	
 	
 	while (1){
@@ -89,4 +96,5 @@ void main (void) {
 		
 	}
 }
+	
 	
