@@ -12,21 +12,20 @@
 	.macpack	longbranch
 	.forceimport	__STARTUP__
 	.import		_pal_bg
-	.import		_ppu_wait_nmi
+	.import		_ppu_off
 	.import		_ppu_on_all
-	.import		_set_vram_buffer
-	.import		_one_vram_buffer
-	.import		_multi_vram_buffer_horz
-	.import		_multi_vram_buffer_vert
-	.import		_get_ppu_addr
-	.export		_palette
+	.import		_vram_adr
+	.import		_vram_put
+	.import		_pal_fade_to
+	.export		_i
 	.export		_text
-	.export		_LETTERA
-	.export		_address
+	.export		_palette
 	.export		_main
 
 .segment	"RODATA"
 
+_text:
+	.byte	$45,$73,$63,$61,$70,$65,$20,$56,$69,$6C,$76,$61,$6E,$69,$61,$00
 _palette:
 	.byte	$0f
 	.byte	$00
@@ -44,26 +43,12 @@ _palette:
 	.byte	$00
 	.byte	$00
 	.byte	$00
-_text:
-	.byte	$48
-	.byte	$45
-	.byte	$4c
-	.byte	$4c
-	.byte	$4f
-	.byte	$20
-	.byte	$57
-	.byte	$4f
-	.byte	$52
-	.byte	$4c
-	.byte	$44
-	.byte	$21
-_LETTERA:
-	.byte	$41
 
 .segment	"BSS"
 
-_address:
-	.res	2,$00
+.segment	"ZEROPAGE"
+_i:
+	.res	1,$00
 
 ; ---------------------------------------------------------------
 ; void __near__ main (void)
@@ -76,133 +61,68 @@ _address:
 .segment	"CODE"
 
 ;
-; ppu_on_all(); // turn on screen
+; ppu_off(); // screen off
 ;
-	jsr     _ppu_on_all
+	jsr     _ppu_off
 ;
-; pal_bg(palette); // load the palette, this can be done any time, even with rendering on
+; pal_bg(palette); 
 ;
 	lda     #<(_palette)
 	ldx     #>(_palette)
 	jsr     _pal_bg
 ;
-; ppu_wait_nmi(); // wait
+; vram_adr(NTADR_A(10, 14));
 ;
-	jsr     _ppu_wait_nmi
-;
-; set_vram_buffer(); // points ppu update to vram_buffer, do this at least once
-;
-	jsr     _set_vram_buffer
-;
-; one_vram_buffer(LETTERA, NTADR_A(2,3)); // pushes 1 byte worth of data to the vram_buffer
-;
-	lda     _LETTERA
-	jsr     pusha
-	ldx     #$20
-	lda     #$62
-	jsr     _one_vram_buffer
-;
-; one_vram_buffer(0x42, NTADR_A(5,6)); // another 1 byte write, letter B
-;
-	lda     #$42
-	jsr     pusha
-	ldx     #$20
-	lda     #$C5
-	jsr     _one_vram_buffer
-;
-; address = get_ppu_addr(0,0x38,0xc0); // (char nt, char x, char y);
-;
-	jsr     decsp2
-	lda     #$00
-	ldy     #$01
-	sta     (sp),y
-	lda     #$38
-	dey
-	sta     (sp),y
-	lda     #$C0
-	jsr     _get_ppu_addr
-	sta     _address
-	stx     _address+1
-;
-; one_vram_buffer('C', address); // another 1 byte write
-;
-	lda     #$43
-	jsr     pusha
-	lda     _address
-	ldx     _address+1
-	jsr     _one_vram_buffer
-;
-; multi_vram_buffer_horz(text, sizeof(text), NTADR_A(10,7)); // pushes 12 bytes, horz
-;
-	jsr     decsp3
-	lda     #<(_text)
-	ldy     #$01
-	sta     (sp),y
-	iny
-	lda     #>(_text)
-	sta     (sp),y
-	lda     #$0C
-	ldy     #$00
-	sta     (sp),y
-	ldx     #$20
-	lda     #$EA
-	jsr     _multi_vram_buffer_horz
-;
-; multi_vram_buffer_horz(text, sizeof(text), NTADR_A(12,12)); // lower
-;
-	jsr     decsp3
-	lda     #<(_text)
-	ldy     #$01
-	sta     (sp),y
-	iny
-	lda     #>(_text)
-	sta     (sp),y
-	lda     #$0C
-	ldy     #$00
-	sta     (sp),y
 	ldx     #$21
-	lda     #$8C
-	jsr     _multi_vram_buffer_horz
+	lda     #$CA
+	jsr     _vram_adr
 ;
-; multi_vram_buffer_horz(text, sizeof(text), NTADR_A(14,17)); // lower still
+; i = 0;
 ;
-	jsr     decsp3
-	lda     #<(_text)
-	ldy     #$01
-	sta     (sp),y
-	iny
-	lda     #>(_text)
-	sta     (sp),y
-	lda     #$0C
-	ldy     #$00
-	sta     (sp),y
-	ldx     #$22
-	lda     #$2E
-	jsr     _multi_vram_buffer_horz
+	lda     #$00
+	sta     _i
 ;
-; multi_vram_buffer_vert(text, sizeof(text), NTADR_A(10,7)); // vertical
+; while(text[i]){
 ;
-	jsr     decsp3
-	lda     #<(_text)
-	ldy     #$01
-	sta     (sp),y
-	iny
-	lda     #>(_text)
-	sta     (sp),y
-	lda     #$0C
-	ldy     #$00
-	sta     (sp),y
-	ldx     #$20
-	lda     #$EA
-	jsr     _multi_vram_buffer_vert
+	jmp     L0004
 ;
-; ppu_wait_nmi(); // waits till nmi, and push new updates to the ppu
+; vram_put(text[i]); // this pushes 1 char to the screen
 ;
-	jsr     _ppu_wait_nmi
+L0002:	ldy     _i
+	lda     _text,y
+	jsr     _vram_put
+;
+; ++i;
+;
+	inc     _i
+;
+; while(text[i]){
+;
+L0004:	ldy     _i
+	lda     _text,y
+	bne     L0002
+;
+; ppu_on_all(); // turn on screen
+;
+	jsr     _ppu_on_all
+;
+; pal_fade_to(0,4); // fade from black to normal
+;
+L0007:	lda     #$00
+	jsr     pusha
+	lda     #$04
+	jsr     _pal_fade_to
+;
+; pal_fade_to(4,0); // fade from normal to black
+;
+	lda     #$04
+	jsr     pusha
+	lda     #$00
+	jsr     _pal_fade_to
 ;
 ; while (1){
 ;
-L0005:	jmp     L0005
+	jmp     L0007
 
 .endproc
 
